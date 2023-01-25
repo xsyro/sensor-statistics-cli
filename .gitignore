@@ -1,2 +1,6 @@
 *.class
 *.log
+**/target
+**/task-temp-directory
+.idea
+.bsp
