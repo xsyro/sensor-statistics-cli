@@ -7,6 +7,7 @@ lazy val root = (project in file("."))
     name := "sensor-statistics-task",
     libraryDependencies ++= Seq(
       "org.scalactic" %% "scalactic" % "3.2.15",
-      "org.scalatest" %% "scalatest" % "3.2.15" % "test"
+      "org.scalatest" %% "scalatest" % "3.2.15" % "test",
+      ""
     )
   )
