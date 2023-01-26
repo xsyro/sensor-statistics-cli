@@ -9,12 +9,13 @@ import com.jamiu.sensorstats.{DataProcessor, ResourceHandler}
 import java.util.concurrent.Executors
 import scala.concurrent.{ExecutionContext, ExecutionContextExecutor, Future}
 import scala.io.{Source => SourceIO}
-import scala.language.implicitConversions
+import scala.language.{existentials, implicitConversions}
+import scala.util.{Failure, Success}
 
 object Application extends App with DataProcessor {
 
 
-  implicit val fileReaderExecutionContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
+  implicit val ex: ExecutionContextExecutor = ExecutionContext.fromExecutor(Executors.newCachedThreadPool())
 
   val csvRecords = ResourceHandler(args.headOption.orElse {
     println("Enter absolute path containing all the CSV files")
@@ -35,6 +36,9 @@ object Application extends App with DataProcessor {
   /**
    * Backed by Akka Stream API!
    */
-  aggregate(csvRecords)
+  aggregate(csvRecords).onComplete {
+    case Failure(exception) => exception.printStackTrace()
+    case Success(_) => println("\n\n\n\n\nDone")
+  }
 
 }

@@ -6,18 +6,11 @@ import akka.stream.scaladsl.{Broadcast, Concat, Flow, GraphDSL, Merge, RunnableG
 import akka.stream.{ClosedShape, OverflowStrategy}
 
 import scala.concurrent.{ExecutionContext, Future}
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 trait DataProcessor {
 
   implicit val actorSystem = ActorSystem("sensor-statistics")
-
-  //  def computeAggregation(sources: Source[SensorStatistic, NotUsed]): Source[SensorStatistic, NotUsed] = {
-  //    Source.combine(
-  //      sources.filter(_.humidity equals "NaN").reduce((_, next) => next),
-  //      sources.filterNot(_.humidity equals "NaN").red,
-  //    )(Merge(_))
-  //  }
 
   def aggregate(records: Future[Array[Vector[String]]])(implicit ex: ExecutionContext) = {
 
@@ -41,35 +34,58 @@ trait DataProcessor {
 
 
     //After-all processes is done.
-    input.via(flow).log("some").runWith(output).map { computedLists =>
+    val future = input.via(flow).log("some").runWith(output)
+
+    future.map { computedLists =>
       println()
       println(s"Num of processed files: ${computedLists.count(_.sensorId equalsIgnoreCase "sensor-id")}")
       println(s"Num of processed measurements: ${computedLists.count(!_.humidity.equalsIgnoreCase("nan"))}")
       println(s"Num of failed measurements: ${computedLists.count(_.humidity.equalsIgnoreCase("nan"))}")
 
-      println("\n\n")
+      println("\nSensors with highest avg list: \n")
+      println("sensor-id,min,avg,max")
+      val cleanRecords = computedLists
+        .filterNot(_.humidity.equalsIgnoreCase("list"))
+        .filterNot(_.sensorId.equalsIgnoreCase("sensor-id"))
 
-//      println(computedLists)
+      //StdOut Valid sensor-id
+      cleanRecords.map(_.sensorId)
+        .distinct //Set[String] for each sensorId
+        .foreach { sensorId =>
+        val list = cleanRecords
+          .filter(_.sensorId equals sensorId)
+          .filterNot(_.humidity equals "NaN")
+          .filterNot(_.humidity.isEmpty)
+          .map(_.humidity)
+          .filter(_.matches("[0-9]+")) //filter to ensure only number are viable before mapTo[Int]
+          .map(_.toInt)
+        if (list.nonEmpty) println(s"$sensorId,${list.min},${list.sum / list.length},${list.max}")
+      }
+
+      //StdOut NaN sensor-id
+      cleanRecords.filter(_.humidity.equals("NaN")).map(_.sensorId).distinct.foreach { item =>
+        println(s"$item,NaN,NaN,NaN")
+      }
+
+
     }
   }
 
 
-  sealed case class SensorStatistic(sensorId: String, humidity: String) {
-
-  }
+  sealed case class SensorStatistic(sensorId: String, humidity: String)
 
 }
 
 
 /*
- * PoC sheet
+ * PoC rough sheet
  */
 //    input.via(flow)
 //      .runForeach(println)
 //val headerSource: Source[String, NotUsed] = Source.combine(
 //  Source.future(records.map(_.length).map(count => s"Num of processed files: $count")),
-//  sensorStatistics.filterNot(_.humidity.equals("NaN")).fold(0)((x, _) => x + x).map(x => s"Num of processed measurements: $x"),
-//  sensorStatistics.filter(_.humidity.equals("NaN")).fold(0)((x, _) => x + x).map(x => s"Num of failed measurements: $x"),
+//  sensorStatistics.filterNot(_.list.equals("NaN")).fold(0)((x, _) => x + x).map(x => s"Num of processed measurements: $x"),
+//  sensorStatistics.filter(_.list.equals("NaN")).fold(0)((x, _) => x + x).map(x => s"Num of failed measurements: $x"),
 //  )(Merge(_))
 
 //    RunnableGraph.fromGraph {
@@ -80,10 +96,10 @@ trait DataProcessor {
 //        val input = builder.add(sensorStatistics.fold(Set[String]())((acc, item) => acc + item.sensorId).flatMapConcat(iteration => Source.fromIterator(() => iteration.iterator))
 //          .flatMapConcat(sensorId => sensorStatistics.filter(f => f.sensorId.equals(sensorId))))
 //
-//        val minHumidity = builder.add(Flow[SensorStatistic].map(x => x.humidity))
-//        val avgHumidity = builder.add(Flow[SensorStatistic].map(x => x.humidity))
-//        val maxHumidity = builder.add(Flow[SensorStatistic].map(x => x.humidity))
-//        val nanHumidity = builder.add(Flow[SensorStatistic].filter(_.humidity equals "NaN").map(x => x.humidity))
+//        val minHumidity = builder.add(Flow[SensorStatistic].map(x => x.list))
+//        val avgHumidity = builder.add(Flow[SensorStatistic].map(x => x.list))
+//        val maxHumidity = builder.add(Flow[SensorStatistic].map(x => x.list))
+//        val nanHumidity = builder.add(Flow[SensorStatistic].filter(_.list equals "NaN").map(x => x.list))
 //
 //        val output = builder.add(Sink.foreach[SensorStatistic](println))
 //
